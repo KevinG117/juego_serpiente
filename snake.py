@@ -13,6 +13,8 @@ clock = pygame.time.Clock()
 GREEN_LIGHT = (168, 230, 161)  # Verde claro
 GREEN_DARK = (76, 175, 80)  # Verde oscuro
 GRID_LINES = (50, 120, 50)  # Verde oscuro pero más suave que negro
+BLACK_OBSTACLE = (0, 0, 0)  # Negro
+BROWN_OBSTACLE = (139, 69, 19)  # Café claro
 
 # Cargar imágenes
 apple_img = pygame.image.load("src/img/apple.png")
@@ -25,11 +27,15 @@ snake_body_img = pygame.transform.scale(snake_body_img, (GRID_SIZE, GRID_SIZE))
 apple_size = int(GRID_SIZE * 1.5)  # Tamaño aumentado de la manzana
 apple_img = pygame.transform.scale(apple_img, (apple_size, apple_size))
 
-# Generar posiciones aleatorias para cuadros claros
+# Generar posiciones aleatorias para cuadros claros y obstáculos
 def generate_light_squares():
     return {(random.randint(0, COLS - 1), random.randint(0, ROWS - 1)) for _ in range(50)}
 
+def generate_obstacles():
+    return {(random.randint(0, COLS - 1), random.randint(0, ROWS - 1)): random.choice([BLACK_OBSTACLE, BROWN_OBSTACLE]) for _ in range(10)}
+
 light_squares = generate_light_squares()
+obstacles = generate_obstacles()
 
 # Clase de la serpiente
 class Snake:
@@ -52,7 +58,11 @@ class Snake:
 
     def check_collision(self):
         head_x, head_y = self.body[0]
-        return (head_x < 0 or head_x >= WIDTH or head_y < 0 or head_y >= HEIGHT or self.body[0] in self.body[1:])
+        if (head_x < 0 or head_x >= WIDTH or head_y < 0 or head_y >= HEIGHT or self.body[0] in self.body[1:]):
+            return True
+        if (head_x // GRID_SIZE, head_y // GRID_SIZE) in obstacles:
+            return True
+        return False
 
     def draw(self):
         # Dibujar cabeza
@@ -67,10 +77,13 @@ class Food:
         self.respawn()
 
     def respawn(self):
-        self.position = (
-            random.randrange(0, WIDTH, GRID_SIZE),
-            random.randrange(0, HEIGHT, GRID_SIZE)
-        )
+        while True:
+            self.position = (
+                random.randrange(0, WIDTH, GRID_SIZE),
+                random.randrange(0, HEIGHT, GRID_SIZE)
+            )
+            if (self.position[0] // GRID_SIZE, self.position[1] // GRID_SIZE) not in obstacles:
+                break
 
     def draw(self):
         x, y = self.position
@@ -85,6 +98,10 @@ def draw_grid():
             color = GREEN_LIGHT if (col, row) in light_squares else GREEN_DARK
             pygame.draw.rect(screen, color, (col * GRID_SIZE, row * GRID_SIZE, GRID_SIZE, GRID_SIZE))
 
+    # Dibujar obstáculos
+    for (col, row), color in obstacles.items():
+        pygame.draw.rect(screen, color, (col * GRID_SIZE, row * GRID_SIZE, GRID_SIZE, GRID_SIZE))
+
     # Dibujar líneas de la cuadrícula con menor visibilidad
     for x in range(0, WIDTH, GRID_SIZE):
         pygame.draw.line(screen, GRID_LINES, (x, 0), (x, HEIGHT), 1)  # Grosor reducido a 1 px
@@ -94,21 +111,11 @@ def draw_grid():
     # Dibujar bordes del juego
     pygame.draw.rect(screen, GREEN_DARK, (0, 0, WIDTH, HEIGHT), 3)
 
-# Función para regenerar cuadros claros después de comer una manzana
+# Función para regenerar cuadros claros y obstáculos después de comer una manzana
 def update_light_squares():
-    global light_squares
+    global light_squares, obstacles
     light_squares = generate_light_squares()
-
-# Función para mostrar el botón de reintentar
-def draw_retry_button():
-    font = pygame.font.Font(None, 36)
-    text = font.render("Reintentar", True, (0, 0, 0))
-    button_rect = pygame.Rect(WIDTH // 2 - 75, HEIGHT // 2 + 20, 150, 50)
-
-    pygame.draw.rect(screen, (255, 255, 255), button_rect, border_radius=10)
-    screen.blit(text, (WIDTH // 2 - 50, HEIGHT // 2 + 30))
-
-    return button_rect
+    obstacles = generate_obstacles()
 
 # Función principal
 def game_loop():
@@ -120,24 +127,11 @@ def game_loop():
 
     while running:
         screen.fill((255, 255, 255))
-        draw_grid()  # Dibuja la cuadrícula con colores aleatorios
+        draw_grid()
 
         if game_over:
-            font = pygame.font.Font(None, 36)
-            text = font.render(f"Manzanas recogidas: {score}", True, (0, 0, 0))
-            screen.blit(text, (WIDTH // 2 - 100, HEIGHT // 2 - 30))
-
-            retry_button = draw_retry_button()
-            pygame.display.flip()
-
-            while True:
-                event = pygame.event.wait()
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    return
-                elif event.type == pygame.MOUSEBUTTONDOWN and retry_button.collidepoint(event.pos):
-                    game_loop()
-                    return
+            pygame.quit()
+            return
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -157,7 +151,7 @@ def game_loop():
             snake.grow()
             food.respawn()
             score += 1
-            update_light_squares()  # Cambiar posiciones de cuadros claros
+            update_light_squares()
 
         if snake.check_collision():
             game_over = True
@@ -165,7 +159,7 @@ def game_loop():
         food.draw()
         snake.draw()
 
-        # Mostrar el puntaje
+        # Mostrar el puntaje en la esquina superior izquierda
         font = pygame.font.Font(None, 36)
         score_text = font.render(f"Manzanas: {score}", True, (0, 0, 0))
         screen.blit(score_text, (10, 10))
@@ -174,6 +168,5 @@ def game_loop():
         clock.tick(10)
 
     pygame.quit()
-
 
 game_loop()
